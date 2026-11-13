@@ -2,7 +2,8 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-export const PIN = 'a5affe62c74e39c1e7ac960d50d8418b807d532c';
+import { PIN, verifyCheckout } from './verify-checkout.mjs';
+export { PIN };
 const directory = dirname(fileURLToPath(import.meta.url));
 export const paths = {
   controller: 'apps/backend/src/public-api/routes/v1/public.integrations.controller.ts',
@@ -49,6 +50,7 @@ export function patchSources(controller, provider) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const root = process.argv[2];
   if (!root) throw new Error('Usage: node apply.mjs <pristine-postiz-checkout> [--check]');
+  await verifyCheckout(root);
   const originals = await Promise.all([readFile(join(root, paths.controller), 'utf8'), readFile(join(root, paths.provider), 'utf8')]);
   const patched = patchSources(...originals);
   if (!process.argv.includes('--check')) {

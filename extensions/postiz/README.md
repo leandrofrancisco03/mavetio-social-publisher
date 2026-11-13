@@ -56,10 +56,16 @@ público o fotografías. El alcance inicial es vídeo privado de Mavetio.
 
 ## Construcción reproducible (solo checkout local/CI)
 
+**Corrección de la revisión técnica:** la receta anterior con `--target dist`
+era incorrecta: el Dockerfile fijado no define ese target. Su arranque upstream
+además ejecuta `prisma db push`. Usar la receta y el procedimiento verificados en
+[VALIDACION-EASYPANEL.md](./VALIDACION-EASYPANEL.md), no los scripts de arranque upstream.
+
 Base revisada: commit `a5affe62c74e39c1e7ac960d50d8418b807d532c`, consultado mediante
 la referencia v2.25.3. No seguir una etiqueta flotante para construir. apply.mjs
 verifica SHA256 de los dos archivos originales y rechaza cualquier otra versión
-o un checkout ya parcheado. Usar una rama propia `codex/mavetio-direct-post-v1`.
+o un checkout ya parcheado. Los verificadores exigen HEAD en ese commit exacto;
+mantener el parche versionado en Mavetio y aplicarlo en un checkout limpio de CI.
 
 1. Clonar Postiz en un directorio independiente y hacer checkout del commit indicado.
 2. Desde el repositorio de Mavetio, ejecutar (sustituir la ruta):
@@ -69,12 +75,19 @@ o un checkout ya parcheado. Usar una rama propia `codex/mavetio-direct-post-v1`.
    node extensions/postiz/apply.mjs C:/ruta/postiz-custom
    ```
 
-3. Revisar y versionar los tres archivos modificados en ese checkout. Conservar
-   el commit base, esta revisión de Mavetio y hashes/digest de la imagen en CI.
-4. En el checkout de Postiz, compilar la imagen con su Dockerfile y target reales:
+3. Revisar los cambios y conservar el commit base, esta revisión de Mavetio y el
+   diff como artefactos de CI. No cambiar HEAD antes de los verificadores.
+4. Preparar la receta sin sincronización automática del esquema (desde Mavetio):
+
+   ```powershell
+   node extensions/postiz/prepare-image.mjs C:/ruta/postiz-custom --check
+   node extensions/postiz/prepare-image.mjs C:/ruta/postiz-custom
+   ```
+
+5. En el checkout de Postiz, compilar la imagen candidata (sin target):
 
    ```sh
-   docker build --target dist -f Dockerfile.dev -t mavetio/postiz:2.25.3-direct-v1 .
+   docker build --build-arg NEXT_PUBLIC_VERSION=v2.25.3-mavetio1 -f Dockerfile.mavetio -t mavetio/postiz:2.25.3-direct-v1 .
    ```
 
    No ejecutar docker-create.sh ni docker-build.sh: los scripts upstream incluyen
