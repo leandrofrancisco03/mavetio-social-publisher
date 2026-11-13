@@ -3,7 +3,7 @@ import { z } from "zod";
 import { authenticate, sameOrigin } from "@/lib/auth";
 import { config } from "@/lib/env";
 import { AppError, safeMessage } from "@/lib/errors";
-import { integrations, postiz } from "@/lib/postiz";
+import { integrations, postiz, parsePostiz } from "@/lib/postiz";
 import { buildPost, submissionSchema } from "@/lib/submissions";
 import { MAX_VIDEO_BYTES } from "@/lib/types";
 
@@ -99,33 +99,29 @@ async function handle(request: Request, context: Context) {
             "DATE_RANGE",
             "Selecciona un periodo de hasta 93 días.",
           );
-        const data = z
-          .object({
-            posts: z.array(
-              z.object({
-                id: z.string(),
-                content: z.string(),
-                state: z.string(),
-                publishDate: z.string(),
-                error: z.string().nullish(),
-                releaseURL: z.string().nullish(),
-                settings: z
-                  .object({ content_posting_method: z.string().optional() })
-                  .nullish(),
-                integration: z
-                  .object({
-                    name: z.string().optional(),
-                    providerIdentifier: z.string().optional(),
-                  })
-                  .nullish(),
-              }),
-            ),
-          })
-          .parse(
-            await postiz(
-              `/posts?${new URLSearchParams({ startDate: start, endDate: end })}`,
-            ),
-          );
+        const postSchema = z.object({
+          posts: z.array(
+            z.object({
+              id: z.string(),
+              content: z.string(),
+              state: z.string(),
+              publishDate: z.string(),
+              error: z.string().nullish(),
+              releaseURL: z.string().nullish(),
+              settings: z
+                .object({ content_posting_method: z.string().optional() })
+                .nullish(),
+              integration: z
+                .object({
+                  name: z.string().optional(),
+                  providerIdentifier: z.string().optional(),
+                })
+                .nullish(),
+            }),
+          ),
+        });
+        const path = `/posts?${new URLSearchParams({ startDate: start, endDate: end })}`;
+        const data = parsePostiz(postSchema, await postiz(path), path);
         return reply({
           posts: data.posts.map((p) => ({
             ...p,

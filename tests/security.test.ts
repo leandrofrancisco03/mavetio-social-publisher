@@ -98,11 +98,11 @@ describe("Autenticación y protección del servidor", () => {
       string,
       RequestInit,
     ];
-    expect(url).toBe("https://postiz.mavetio.com/public/v1/integrations");
+    expect(url).toBe("https://postiz.mavetio.com/api/public/v1/integrations");
     expect(new Headers(init.headers).get("Authorization")).toBe(
       "server-only-secret",
     );
-    expect(init.redirect).toBe("error");
+    expect(init.redirect).toBe("manual");
     expect(init.cache).toBe("no-store");
   });
   it("muestra errores reales sin reflejar credenciales", async () => {
