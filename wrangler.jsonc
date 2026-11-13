@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mavetio-social-publisher",
+  "compatibility_date": "2026-11-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "social.mavetio.com", "custom_domain": true }],
+  "vars": {
+    "APP_URL": "https://social.mavetio.com",
+    "POSTIZ_API_URL": "https://api.postiz.com/public/v1",
+    "POSTIZ_WEB_URL": "https://app.postiz.com",
+    "TIKTOK_SANDBOX": "true",
+    "PRIVACY_URL": "https://mavetio.com/privacidad",
+    "TERMS_URL": "https://mavetio.com/terminos",
+    "DELETION_URL": "https://mavetio.com/eliminacion-de-datos",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mavetio-social-publisher",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "main": "vinext/server/fetch-handler",
+  "assets": {
+    "directory": "dist/client",
+    "html_handling": "none",
+    "not_found_handling": "none",
+    "binding": "ASSETS",
+    "run_worker_first": ["/*", "!/_next/static/*", "!/*/_next/static/*"],
+  },
+}

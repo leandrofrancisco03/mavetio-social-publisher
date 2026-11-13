@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.wrangler/
+.cloudflare/
+.vite/
+.env*
+.dev.vars*
+!.env.example
+!.dev.vars.example
+*.tsbuildinfo
+coverage/
+.vinext/

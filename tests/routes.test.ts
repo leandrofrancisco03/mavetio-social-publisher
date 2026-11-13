@@ -1,0 +1,191 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+import { SignJWT } from "jose";
+import { env } from "./env";
+import { GET, POST } from "../app/api/publisher/[action]/route";
+
+vi.mock("../lib/auth", () => ({
+  authenticate: vi.fn(async () => ({
+    id: "user-1",
+    email: "tester@example.com",
+  })),
+  sameOrigin: vi.fn(),
+}));
+const secret = "test-only-signing-secret-with-more-than-32-characters";
+let postCalls = 0;
+let upstreamFailure = false;
+let db: DatabaseSync;
+beforeEach(() => {
+  db?.close();
+  db = new DatabaseSync(":memory:");
+  db.exec(readFileSync("migrations/0001_submissions.sql", "utf8"));
+  Object.assign(env, {
+    POSTIZ_API_KEY: "test-only-key",
+    MEDIA_SIGNING_SECRET: secret,
+    DB: {
+      prepare: (sql: string) => ({
+        bind: (...values: (string | number)[]) => ({
+          run: async () => ({
+            meta: { changes: db.prepare(sql).run(...values).changes },
+          }),
+          first: async () => db.prepare(sql).get(...values) || null,
+        }),
+      }),
+    },
+  });
+  postCalls = 0;
+  upstreamFailure = false;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (url.endsWith("/integrations"))
+        return Response.json([
+          {
+            id: "channel",
+            name: "Test fixture",
+            identifier: "tiktok",
+            disabled: false,
+          },
+        ]);
+      if (url.endsWith("/posts")) {
+        postCalls++;
+        if (upstreamFailure) throw new Error("network timeout");
+        return Response.json([
+          { postId: "post-fixture", integration: "channel" },
+        ]);
+      }
+      throw new Error("Unexpected URL in unit test");
+    }),
+  );
+});
+async function submission(subject = "user-1") {
+  const mediaReceipt = await new SignJWT({
+    id: "uploaded-file",
+    path: "https://uploads.postiz.com/video.mp4",
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(subject)
+    .setAudience("mavetio-media")
+    .setIssuedAt()
+    .setExpirationTime("2h")
+    .sign(new TextEncoder().encode(secret));
+  return {
+    requestId: crypto.randomUUID(),
+    integrationId: "channel",
+    title: "Prueba unitaria",
+    description: "Solo fixture de prueba",
+    action: "now",
+    method: "UPLOAD",
+    consent: true,
+    mediaReceipt,
+  };
+}
+async function send(input: unknown) {
+  return POST(
+    new Request("https://social.mavetio.com/api/publisher/submit", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        origin: "https://social.mavetio.com",
+      },
+      body: JSON.stringify(input),
+    }),
+    { params: Promise.resolve({ action: "submit" }) },
+  );
+}
+describe("Límites y registro persistente de envíos", () => {
+  it("reutiliza la respuesta para el mismo envío sin publicar dos veces", async () => {
+    const input = await submission();
+    expect((await send(input)).status).toBe(201);
+    const again = await send(input);
+    expect(again.status).toBe(200);
+    expect(await again.json()).toEqual([
+      { postId: "post-fixture", integration: "channel" },
+    ]);
+    expect(postCalls).toBe(1);
+  });
+  it("bloquea dos solicitudes concurrentes con la misma clave", async () => {
+    const input = await submission();
+    const responses = await Promise.all([send(input), send(input)]);
+    expect(responses.some((r) => r.status === 201)).toBe(true);
+    expect(postCalls).toBe(1);
+  });
+  it("no reenvía después de un timeout de resultado desconocido", async () => {
+    upstreamFailure = true;
+    const input = await submission();
+    expect((await send(input)).status).toBe(502);
+    expect((await send(input)).status).toBe(409);
+    expect(postCalls).toBe(1);
+  });
+  it("rechaza reutilizar la clave para un contenido distinto", async () => {
+    const input = await submission();
+    await send(input);
+    expect((await send({ ...input, title: "Distinto" })).status).toBe(409);
+    expect(postCalls).toBe(1);
+  });
+  it("rechaza archivos firmados para otro usuario", async () => {
+    expect((await send(await submission("other-user"))).status).toBe(400);
+    expect(postCalls).toBe(0);
+  });
+  it("rechaza cuentas ajenas antes de publicar", async () => {
+    expect(
+      (await send({ ...(await submission()), integrationId: "foreign" }))
+        .status,
+    ).toBe(400);
+    expect(postCalls).toBe(0);
+  });
+  it("rechaza fechas pasadas y Direct Post", async () => {
+    expect(
+      (
+        await send({
+          ...(await submission()),
+          action: "schedule",
+          date: "2020-01-01T00:00:00.000Z",
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (await send({ ...(await submission()), method: "DIRECT_POST" })).status,
+    ).toBe(400);
+    expect(postCalls).toBe(0);
+  });
+  it("rechaza carga demasiado grande sin leerla ni llamar a Postiz", async () => {
+    const result = await POST(
+      new Request("https://social.mavetio.com/api/publisher/upload", {
+        method: "POST",
+        headers: { "content-length": "30000000" },
+        body: "x",
+      }),
+      { params: Promise.resolve({ action: "upload" }) },
+    );
+    expect(result.status).toBe(413);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it("rechaza archivos que solo aparentan ser vídeos", async () => {
+    const form = new FormData();
+    form.set(
+      "file",
+      new File(["not really a video"], "video.mp4", { type: "video/mp4" }),
+    );
+    const result = await POST(
+      new Request("https://social.mavetio.com/api/publisher/upload", {
+        method: "POST",
+        body: form,
+      }),
+      { params: Promise.resolve({ action: "upload" }) },
+    );
+    expect(result.status).toBe(400);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it("limita el rango de consulta", async () => {
+    const result = await GET(
+      new Request(
+        "https://social.mavetio.com/api/publisher/posts?startDate=2026-01-01T00:00:00.000Z&endDate=2026-12-31T00:00:00.000Z",
+      ),
+      { params: Promise.resolve({ action: "posts" }) },
+    );
+    expect(result.status).toBe(400);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
