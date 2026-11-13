@@ -8,8 +8,8 @@
   "routes": [{ "pattern": "social.mavetio.com", "custom_domain": true }],
   "vars": {
     "APP_URL": "https://social.mavetio.com",
-    "POSTIZ_API_URL": "https://postiz.mavetio.com/public/v1",
-    "POSTIZ_WEB_URL": "https://postiz.mavetio.com.com",
+    "POSTIZ_API_URL": "https://postiz.mavetio.com/api/public/v1",
+    "POSTIZ_WEB_URL": "https://postiz.mavetio.com",
     "CF_ACCESS_AUD": "a4761f8be09aeeda7589eb3becba898d9deac85b39f27b47e74f4c88e1ebf295",
     "CF_ACCESS_TEAM_DOMAIN": "testpipipi.cloudflareaccess.com",
     "TIKTOK_SANDBOX": "true",
