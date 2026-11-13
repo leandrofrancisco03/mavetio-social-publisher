@@ -9,7 +9,7 @@ export async function postiz(path: string, init: RequestInit = {}) {
       "POSTIZ_NOT_CONFIGURED",
       "Pendiente: configurar la API de Postiz en el servidor.",
     );
-  const base = c.POSTIZ_API_URL || "https://api.postiz.com/public/v1";
+  const base = c.POSTIZ_API_URL || "https://postiz.mavetio.com/public/v1";
   if (new URL(base).protocol !== "https:")
     throw new AppError(503, "POSTIZ_CONFIG", "Postiz debe usar HTTPS.");
   const headers = new Headers(init.headers);

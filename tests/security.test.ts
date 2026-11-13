@@ -98,7 +98,7 @@ describe("Autenticación y protección del servidor", () => {
       string,
       RequestInit,
     ];
-    expect(url).toBe("https://api.postiz.com/public/v1/integrations");
+    expect(url).toBe("https://postiz.mavetio.com/public/v1/integrations");
     expect(new Headers(init.headers).get("Authorization")).toBe(
       "server-only-secret",
     );
