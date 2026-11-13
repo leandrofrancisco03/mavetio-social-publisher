@@ -158,6 +158,49 @@ describe("Límites y registro persistente de envíos", () => {
     expect((await send(input)).status).toBe(502);
     expect((await send(input)).status).toBe(409);
     expect(postCalls).toBe(1);
+    expect(
+      db
+        .prepare("SELECT status FROM submissions WHERE id=?")
+        .get(input.requestId)?.status,
+    ).toBe("unknown");
+  });
+  it("envía POST /posts con UPLOAD, cuenta seleccionada y archivo firmado", async () => {
+    const input = await submission();
+    const response = await send(input);
+    expect(response.status).toBe(201);
+    const call = vi
+      .mocked(fetch)
+      .mock.calls.find(([url]) => String(url).endsWith("/posts"));
+    expect(call?.[1]?.method).toBe("POST");
+    const payload = JSON.parse(String(call?.[1]?.body));
+    expect(payload.type).toBe("now");
+    expect(payload.posts[0].integration).toEqual({ id: input.integrationId });
+    expect(payload.posts[0].settings.content_posting_method).toBe("UPLOAD");
+    expect(payload.posts[0].value[0].image[0].id).toBe("uploaded-file");
+    expect(
+      db
+        .prepare("SELECT status FROM submissions WHERE id=?")
+        .get(input.requestId)?.status,
+    ).toBe("completed");
+  });
+  it("un timeout real mantiene resultado desconocido y no reintenta", async () => {
+    vi.mocked(fetch).mockImplementation(async (url) => {
+      if (String(url).endsWith("/integrations"))
+        return Response.json([
+          {
+            id: "channel",
+            name: "Fixture",
+            identifier: "tiktok",
+            disabled: false,
+          },
+        ]);
+      postCalls++;
+      throw new DOMException("test timeout", "TimeoutError");
+    });
+    const input = await submission();
+    expect((await send(input)).status).toBe(504);
+    expect((await send(input)).status).toBe(409);
+    expect(postCalls).toBe(1);
   });
   it("rechaza reutilizar la clave para un contenido distinto", async () => {
     const input = await submission();

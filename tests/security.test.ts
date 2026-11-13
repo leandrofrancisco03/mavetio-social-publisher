@@ -172,6 +172,6 @@ describe("Contrato de publicación", () => {
         state: "PUBLISHED",
         settings: { content_posting_method: "UPLOAD" },
       }),
-    ).toBe("Enviado a TikTok · completar en la app");
+    ).toBe("Completado según Postiz · UPLOAD");
   });
 });

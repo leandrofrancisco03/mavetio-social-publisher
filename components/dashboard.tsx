@@ -28,6 +28,8 @@ import {
 import {
   MAX_VIDEO_BYTES,
   postLabel,
+  postDeliveryDetail,
+  submissionNotice,
   readPostSettings,
   postNetwork,
   postContentText,
@@ -711,6 +713,9 @@ export function PostList({
                 </p>
               )}
               <small className="post-id">ID: {p.id}</small>
+              {postDeliveryDetail(p) && (
+                <p className="panel-caption">{postDeliveryDetail(p)}</p>
+              )}
             </div>
             <div className="post-state">
               <span className={`status status-${p.state.toLowerCase()}`}>
@@ -758,6 +763,7 @@ function Composer({
   const [phase, setPhase] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [stored, setStored] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const requestId = useRef<string>("");
   const receipt = useRef("");
@@ -781,6 +787,7 @@ function Composer({
     setError("");
     setVideoValid(false);
     receipt.current = "";
+    setStored(false);
     if (!selected) {
       setFile(null);
       return;
@@ -815,6 +822,7 @@ function Composer({
         receipt.current = (
           await api<{ receipt: string }>("upload", form)
         ).receipt;
+        setStored(true);
       }
       setPhase("Confirmando la solicitud con Postiz…");
       if (!requestId.current) requestId.current = crypto.randomUUID();
@@ -835,7 +843,10 @@ function Composer({
       });
       sessionStorage.removeItem("mavetio-pending");
       setSuccess(
-        `${action === "draft" ? "Borrador guardado" : action === "schedule" ? "Envío programado" : "Solicitud de envío aceptada"} por Postiz. ID: ${result.map((p) => p.postId).join(", ")}. ${action === "draft" ? "Podrás revisarlo en Postiz." : "Finaliza la publicación en TikTok cuando llegue a tu bandeja."}`,
+        submissionNotice(
+          action,
+          result.map((p) => p.postId),
+        ),
       );
       setUncertain(true);
       onCreated();
@@ -1029,6 +1040,12 @@ function Composer({
             <p>{error}</p>
           </div>
         )}
+        {stored && !success && (
+          <p role="status">
+            Archivo almacenado en Postiz. Esto no confirma que se haya creado la
+            publicación ni entregado a TikTok.
+          </p>
+        )}
         {success && (
           <div className="notice success" role="status">
             <CheckCircle2 size={19} />
@@ -1056,6 +1073,7 @@ function Composer({
                     sessionStorage.removeItem("mavetio-pending");
                     requestId.current = "";
                     receipt.current = "";
+                    setStored(false);
                     setUncertain(false);
                     setError("");
                   }
@@ -1073,6 +1091,7 @@ function Composer({
             onClick={() => {
               requestId.current = "";
               receipt.current = "";
+              setStored(false);
               setUncertain(false);
               setSuccess("");
               setTitle("");

@@ -18,7 +18,7 @@ export function postLabel(post: SocialPost) {
     post.state === "PUBLISHED" &&
     readPostSettings(post.settings)?.content_posting_method === "UPLOAD"
   )
-    return "Enviado a TikTok · completar en la app";
+    return "Completado según Postiz · UPLOAD";
   return (
     (
       {
@@ -29,6 +29,33 @@ export function postLabel(post: SocialPost) {
       } as Record<string, string>
     )[post.state] || post.state
   );
+}
+
+export function postDeliveryDetail(post: SocialPost): string | null {
+  if (readPostSettings(post.settings)?.content_posting_method !== "UPLOAD")
+    return null;
+  switch (post.state) {
+    case "DRAFT":
+      return "Borrador en Postiz. No solicitado para entrega a TikTok.";
+    case "QUEUE":
+      return "En cola o procesándose en Postiz. Entrega a la bandeja todavía no confirmada.";
+    case "ERROR":
+      return "Postiz informa un error; la entrega puede haber fallado o quedar sin confirmar. Revisa el detalle y la bandeja antes de reenviar.";
+    case "PUBLISHED":
+      return "Postiz informa que terminó el flujo UPLOAD. Mavetio no consulta directamente el estado de TikTok. Comprueba la notificación y el vídeo en la bandeja; esto no acredita publicación en el perfil.";
+    default:
+      return "Estado de entrega no reconocido. Comprueba Postiz y TikTok antes de reenviar.";
+  }
+}
+
+export function submissionNotice(action: string, ids: string[]) {
+  const label =
+    action === "draft"
+      ? "Borrador guardado"
+      : action === "schedule"
+        ? "Solicitud programada aceptada"
+        : "Solicitud de envío aceptada";
+  return `${label} por Postiz. ID: ${ids.join(", ")}. ${action === "draft" ? "No se ha solicitado el envío a TikTok." : "Esta aceptación no confirma entrega a TikTok. Actualiza las publicaciones y comprueba la bandeja antes de reenviar."}`;
 }
 
 export function readPostSettings(

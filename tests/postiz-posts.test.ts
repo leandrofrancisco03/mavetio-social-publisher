@@ -6,6 +6,8 @@ import { env } from "./env";
 import { postizPostsSchema } from "../lib/postiz-posts";
 import {
   postLabel,
+  postDeliveryDetail,
+  submissionNotice,
   readPostSettings,
   postContentText,
   postNetwork,
@@ -113,7 +115,7 @@ it("lee solo los ajustes necesarios sin mutar el JSON original", () => {
     ...fixture.posts[1],
     settings: '{"content_posting_method":"UPLOAD","__type":"tiktok"}',
   };
-  expect(postLabel(post)).toBe("Enviado a TikTok · completar en la app");
+  expect(postLabel(post)).toBe("Completado según Postiz · UPLOAD");
   expect(typeof post.settings).toBe("string");
   expect(
     readPostSettings({ content_posting_method: "DIRECT_POST" })
@@ -121,6 +123,36 @@ it("lee solo los ajustes necesarios sin mutar el JSON original", () => {
   ).toBe("DIRECT_POST");
   expect(readPostSettings(null)).toBeNull();
   expect(readPostSettings(undefined)).toBeNull();
+});
+it.each([
+  ["DRAFT", "No solicitado"],
+  ["QUEUE", "todavía no confirmada"],
+  ["ERROR", "sin confirmar"],
+  ["PUBLISHED", "no acredita publicación"],
+  ["UNKNOWN", "no reconocido"],
+])("presenta UPLOAD %s sin inventar entrega", (state, expected) => {
+  const post = {
+    ...fixture.posts[0],
+    state,
+    settings: { content_posting_method: "UPLOAD" },
+  };
+  expect(postDeliveryDetail(post)).toContain(expected);
+  const html = renderToStaticMarkup(
+    createElement(PostList, { posts: [post], loading: false }),
+  );
+  expect(html).toContain(expected);
+  expect(html).not.toContain("Enviado a TikTok");
+});
+it.each(["now", "schedule"])("aceptación %s no acredita entrega", (action) => {
+  expect(submissionNotice(action, ["fixture-post"])).toContain(
+    "no confirma entrega",
+  );
+  expect(submissionNotice(action, ["fixture-post"])).toContain("fixture-post");
+});
+it("un borrador no se presenta como solicitado a TikTok", () => {
+  expect(submissionNotice("draft", ["fixture-post"])).toContain(
+    "No se ha solicitado",
+  );
 });
 it("renderiza la lista compartida por ambas vistas con redes, fechas y estados principales", () => {
   const html = renderToStaticMarkup(
