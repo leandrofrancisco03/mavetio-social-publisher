@@ -1,4 +1,11 @@
 @import "tailwindcss";
+
+.post-history {
+  font-size: 10px;
+  color: #6d7972;
+  overflow-wrap: anywhere;
+  margin-top: 8px;
+}
 @theme {
   --color-brand: #245b43;
   --font-sans: "Segoe UI", Arial, sans-serif;

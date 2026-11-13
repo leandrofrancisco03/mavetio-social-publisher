@@ -24,6 +24,9 @@ import { Brand } from "./brand";
 import {
   MAX_VIDEO_BYTES,
   postLabel,
+  readPostSettings,
+  postNetwork,
+  postContentText,
   type Integration,
   type PublicConfig,
   type SocialPost,
@@ -53,7 +56,7 @@ async function api<T>(action: string, body?: unknown): Promise<T> {
     throw new Error(data.error || `Error HTTP ${response.status}`);
   return data as T;
 }
-function httpsLink(value?: string) {
+function httpsLink(value?: string | null) {
   try {
     return value && new URL(value).protocol === "https:" ? value : undefined;
   } catch {
@@ -642,7 +645,7 @@ export function Dashboard({
   );
 }
 
-function PostList({
+export function PostList({
   posts,
   loading,
 }: {
@@ -682,12 +685,23 @@ function PostList({
               <FileVideo size={22} />
             </span>
             <div className="post-content">
-              <strong>{p.content || "Sin texto"}</strong>
+              <strong>{postContentText(p.content) || "Sin texto"}</strong>
               <small>
-                {p.integration?.name || "Cuenta de Postiz"} ·{" "}
+                {postNetwork(p)} · {p.integration?.name || "Cuenta de Postiz"} ·{" "}
                 {shortDate(p.publishDate)}
               </small>
-              {p.error && <p className="post-error">{p.error}</p>}
+              {p.error && (
+                <p
+                  className={
+                    p.state === "ERROR" ? "post-error" : "post-history"
+                  }
+                >
+                  {p.state === "ERROR"
+                    ? "Error de publicación: "
+                    : "Mensaje histórico informado por Postiz (no cambia el estado): "}
+                  {p.error}
+                </p>
+              )}
               <small className="post-id">ID: {p.id}</small>
             </div>
             <div className="post-state">
@@ -700,7 +714,8 @@ function PostList({
                   target="_blank"
                   rel="noreferrer"
                 >
-                  {p.settings?.content_posting_method === "UPLOAD"
+                  {readPostSettings(p.settings)?.content_posting_method ===
+                  "UPLOAD"
                     ? "Abrir TikTok"
                     : "Ver destino"}{" "}
                   <ArrowUpRight size={13} />

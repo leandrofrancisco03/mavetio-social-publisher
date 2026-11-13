@@ -1,0 +1,62 @@
+{
+  "posts": [
+    {
+      "id": "cmwf53kng000hqr6ptkrcjiaf",
+      "content": "<p>accion a invertir paso a paso</p>",
+      "publishDate": "2026-11-13T16:01:00.000Z",
+      "releaseURL": null,
+      "releaseId": null,
+      "state": "ERROR",
+      "error": "App not approved for public posting, contact support",
+      "intervalInDays": null,
+      "group": "3c0a3631-5a9e-4f09-b7aa-b167d57241b5",
+      "creationMethod": "WEB",
+      "settings": "{\"privacy_level\":\"PUBLIC_TO_EVERYONE\",\"content_posting_method\":\"DIRECT_POST\",\"__type\":\"tiktok\"}",
+      "tags": [],
+      "integration": {
+        "id": "cmwf2b2wk0001qr6pram5xj1k",
+        "providerIdentifier": "tiktok",
+        "name": "Francisco",
+        "picture": "https://postiz.mavetio.com/uploads/2026/11/13/87e6e4ad77c849b5db49bb5e202a264e.jpg"
+      }
+    },
+    {
+      "id": "cmwf2c66m0002qr6pms3y2j3f",
+      "content": "<p>tutorial n8n 2026 aprobado</p>",
+      "publishDate": "2026-11-13T16:05:00.000Z",
+      "releaseURL": "https://www.tiktok.com/@leandrgm2i4",
+      "releaseId": "v_pub_file~v2-1.7707687861029799937",
+      "state": "PUBLISHED",
+      "error": "App not approved for public posting, contact support",
+      "intervalInDays": null,
+      "group": "5938abfd-6c7c-45c7-b070-918f0b95f487",
+      "creationMethod": "WEB",
+      "settings": "{\"privacy_level\":\"SELF_ONLY\",\"content_posting_method\":\"DIRECT_POST\",\"__type\":\"tiktok\"}",
+      "tags": [],
+      "integration": {
+        "id": "cmwf2b2wk0001qr6pram5xj1k",
+        "providerIdentifier": "tiktok",
+        "name": "Francisco"
+      }
+    },
+    {
+      "id": "cmwdxjymp0002qi7bysm29wq9",
+      "content": "workflow explicado para automatización de tareas sheet 2026\n\n#n8n #automatizacion #tutorial",
+      "publishDate": "2026-11-12T19:45:00.000Z",
+      "releaseURL": "https://www.youtube.com/watch?v=S3e6Ghzu19o",
+      "releaseId": "S3e6Ghzu19o",
+      "state": "PUBLISHED",
+      "error": null,
+      "intervalInDays": null,
+      "group": "f3b3b765-6776-4194-afaf-fd92ac0b7593",
+      "creationMethod": "API",
+      "settings": "{\"__type\":\"youtube\",\"title\":\"tutorial 6 pm n8n\",\"type\":\"public\",\"selfDeclaredMadeForKids\":\"no\",\"tags\":[]}",
+      "tags": [],
+      "integration": {
+        "id": "cmwdvcn4r0001qi7b4k7l03ij",
+        "providerIdentifier": "youtube",
+        "name": "Historias y Más"
+      }
+    }
+  ]
+}
