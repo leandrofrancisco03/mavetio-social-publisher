@@ -95,6 +95,47 @@ async function send(input: unknown) {
   );
 }
 describe("Límites y registro persistente de envíos", () => {
+  async function connect(body: unknown) {
+    return POST(
+      new Request("https://social.mavetio.com/api/publisher/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+      { params: Promise.resolve({ action: "connect" }) },
+    );
+  }
+  it.each(["channel", "", "unknown"])(
+    "bloquea reconexión directa %s sin llamar a Postiz",
+    async (refresh) => {
+      const response = await connect({ refresh });
+      expect(response.status).toBe(409);
+      expect((await response.json()).code).toBe("RECONNECT_IN_POSTIZ");
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+  it("conecta sin refresh ni retorno inventado y conserva el estado de Postiz", async () => {
+    const url =
+      "https://www.tiktok.com/v2/auth/authorize/?client_key=fixture&state=unit-test-state";
+    vi.mocked(fetch).mockResolvedValue(Response.json({ url }));
+    const response = await connect({});
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ url });
+    expect(String(vi.mocked(fetch).mock.calls[0][0])).toMatch(
+      /\/api\/public\/v1\/social\/tiktok$/,
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    "https://attacker.test/?client_key=fixture",
+    "http://www.tiktok.com/?client_key=fixture",
+    "https://www.tiktok.com/",
+  ])("rechaza autorización inválida %s", async (url) => {
+    vi.mocked(fetch).mockResolvedValue(Response.json({ url }));
+    const response = await connect({});
+    expect(response.status).toBe(502);
+    expect((await response.json()).code).toBe("OAUTH_NOT_READY");
+  });
   it("reutiliza la respuesta para el mismo envío sin publicar dos veces", async () => {
     const input = await submission();
     expect((await send(input)).status).toBe(201);

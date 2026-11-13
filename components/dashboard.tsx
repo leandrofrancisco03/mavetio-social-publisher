@@ -22,6 +22,10 @@ import {
 } from "lucide-react";
 import { Brand } from "./brand";
 import {
+  PostizReconnectLink,
+  TikTokAuthorizationLink,
+} from "./postiz-navigation";
+import {
   MAX_VIDEO_BYTES,
   postLabel,
   readPostSettings,
@@ -89,6 +93,7 @@ export function Dashboard({
   const [filter, setFilter] = useState("ALL");
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState("");
+  const [authorizationUrl, setAuthorizationUrl] = useState("");
   const loadGeneration = useRef(0);
   const load = useCallback(async () => {
     const generation = ++loadGeneration.current;
@@ -121,17 +126,16 @@ export function Dashboard({
   useEffect(() => {
     void load();
   }, [load]);
-  async function connect(refresh?: string) {
+  async function connect() {
     setConnecting(true);
     setConnectError("");
+    setAuthorizationUrl("");
     try {
-      const { url } = await api<{ url: string }>(
-        "connect",
-        refresh ? { refresh } : {},
-      );
-      window.location.assign(url);
+      const { url } = await api<{ url: string }>("connect", {});
+      setAuthorizationUrl(url);
     } catch (e) {
       setConnectError((e as Error).message);
+    } finally {
       setConnecting(false);
     }
   }
@@ -435,12 +439,19 @@ export function Dashboard({
                   {connectError}
                 </div>
               )}
+              {authorizationUrl && (
+                <TikTokAuthorizationLink url={authorizationUrl} />
+              )}
               <div className="notice">
                 <ShieldCheck size={20} />
                 <p>
-                  Continuarás en el OAuth gestionado por Postiz. Después de
-                  autorizar, vuelve a este panel y pulsa «Actualizar». No se
-                  crea una conexión hasta que Postiz la confirme.
+                  La autorización se abre en otra pestaña y la gestiona Postiz.
+                  Para reconectar, abre la gestión de Postiz, comprueba la
+                  organización y selecciona allí el canal correcto. Después,
+                  vuelve a esta pestaña y pulsa «Actualizar». Actualizar
+                  consulta las cuentas; no confirma por sí solo que OAuth haya
+                  terminado. No reutilices un enlace de autorización ya usado o
+                  caducado.
                 </p>
               </div>
               {accounts?.length ? (
@@ -461,13 +472,10 @@ export function Dashboard({
                       </small>
                     </div>
                     {a.identifier === "tiktok" && (
-                      <button
-                        className="button secondary small"
-                        disabled={connecting}
-                        onClick={() => connect(a.id)}
-                      >
-                        Reconectar
-                      </button>
+                      <PostizReconnectLink
+                        baseUrl={config?.postizWebUrl}
+                        name={a.name}
+                      />
                     )}
                   </div>
                 ))

@@ -119,24 +119,17 @@ async function handle(request: Request, context: Context) {
           .object({ refresh: z.string().max(200).optional() })
           .strict()
           .parse(await jsonBody(request));
-        if (
-          input.refresh &&
-          !(await integrations()).some(
-            (i) => i.id === input.refresh && i.identifier === "tiktok",
-          )
-        )
+        // Public integrations expose the database id, not the provider internalId
+        // required by Postiz refresh. Never start OAuth with the wrong identity.
+        if (input.refresh !== undefined)
           throw new AppError(
-            404,
-            "ACCOUNT_NOT_FOUND",
-            "La cuenta no pertenece a esta organización.",
+            409,
+            "RECONNECT_IN_POSTIZ",
+            "Gestiona la reconexión del canal desde Postiz y después actualiza las cuentas aquí.",
           );
         const result = z
           .object({ url: z.url() })
-          .parse(
-            await postiz(
-              `/social/tiktok${input.refresh ? `?refresh=${encodeURIComponent(input.refresh)}` : ""}`,
-            ),
-          );
+          .parse(await postiz("/social/tiktok"));
         const url = new URL(result.url);
         if (
           url.protocol !== "https:" ||
