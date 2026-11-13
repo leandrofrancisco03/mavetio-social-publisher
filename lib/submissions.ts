@@ -1,5 +1,5 @@
 import { z } from "zod";
-export const submissionSchema = z
+const baseSubmissionSchema = z
   .object({
     requestId: z.uuid(),
     integrationId: z.string().min(1).max(200),
@@ -7,11 +7,31 @@ export const submissionSchema = z
     description: z.string().trim().max(1800),
     action: z.enum(["now", "schedule", "draft"]),
     date: z.iso.datetime().optional(),
-    method: z.literal("UPLOAD"),
     mediaReceipt: z.string().min(20).max(10000),
     consent: z.literal(true),
   })
   .strict();
+export const directSettingsSchema = z
+  .object({
+    privacy_level: z.literal("SELF_ONLY"),
+    comment: z.boolean(),
+    duet: z.boolean(),
+    stitch: z.boolean(),
+    brand_content_toggle: z.literal(false),
+    brand_organic_toggle: z.boolean(),
+    video_made_with_ai: z.boolean(),
+  })
+  .strict();
+export const submissionSchema = z.discriminatedUnion("method", [
+  baseSubmissionSchema.extend({ method: z.literal("UPLOAD") }),
+  baseSubmissionSchema.extend({
+    method: z.literal("DIRECT_POST"),
+    action: z.literal("now"),
+    direct: directSettingsSchema,
+    musicConsent: z.literal(true),
+    finalConfirmation: z.literal(true),
+  }),
+]);
 export type Submission = z.infer<typeof submissionSchema>;
 export function buildPost(
   input: Submission,
@@ -44,7 +64,8 @@ export function buildPost(
           brand_content_toggle: false,
           brand_organic_toggle: false,
           video_made_with_ai: false,
-          content_posting_method: "UPLOAD",
+          ...(input.method === "DIRECT_POST" ? input.direct : {}),
+          content_posting_method: input.method,
         },
       },
     ],

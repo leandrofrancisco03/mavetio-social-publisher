@@ -16,6 +16,7 @@ export type Config = {
   CF_ACCESS_AUD?: string;
   MEDIA_SIGNING_SECRET?: string;
   TIKTOK_SANDBOX?: string;
+  TIKTOK_DIRECT_POST_ENABLED?: string;
   PRIVACY_URL?: string;
   TERMS_URL?: string;
   DELETION_URL?: string;

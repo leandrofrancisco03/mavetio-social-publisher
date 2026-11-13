@@ -11,6 +11,7 @@ export type PublicConfig = {
   storageConfigured: boolean;
   postizWebUrl: string;
   sandbox: boolean;
+  directPostConfigured?: boolean;
 };
 export const MAX_VIDEO_BYTES = 25 * 1024 * 1024;
 export function postLabel(post: SocialPost) {

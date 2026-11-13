@@ -21,6 +21,7 @@ beforeEach(() => {
   db = new DatabaseSync(":memory:");
   db.exec(readFileSync("migrations/0001_submissions.sql", "utf8"));
   Object.assign(env, {
+    TIKTOK_DIRECT_POST_ENABLED: "false",
     POSTIZ_API_KEY: "test-only-key",
     MEDIA_SIGNING_SECRET: secret,
     DB: {
@@ -59,10 +60,11 @@ beforeEach(() => {
     }),
   );
 });
-async function submission(subject = "user-1") {
+async function submission(subject = "user-1", directVideo = false) {
   const mediaReceipt = await new SignJWT({
     id: "uploaded-file",
     path: "https://uploads.postiz.com/video.mp4",
+    ...(directVideo ? { directVideo: true, duration: 10 } : {}),
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(subject)
@@ -95,6 +97,117 @@ async function send(input: unknown) {
   );
 }
 describe("Límites y registro persistente de envíos", () => {
+  const creator = () => ({
+    contract: "mavetio-tiktok-v1",
+    checkedAt: new Date().toISOString(),
+    creator_nickname: "Fixture",
+    creator_username: "fixture",
+    privacy_level_options: ["SELF_ONLY"],
+    comment_disabled: true,
+    duet_disabled: true,
+    stitch_disabled: true,
+    max_video_post_duration_sec: 60,
+  });
+  async function directInput() {
+    return {
+      ...(await submission("user-1", true)),
+      method: "DIRECT_POST",
+      action: "now",
+      musicConsent: true,
+      finalConfirmation: true,
+      direct: {
+        privacy_level: "SELF_ONLY",
+        comment: false,
+        duet: false,
+        stitch: false,
+        brand_organic_toggle: false,
+        brand_content_toggle: false,
+        video_made_with_ai: false,
+      },
+    };
+  }
+  function enableDirect(value: unknown = creator(), status = 200) {
+    env.TIKTOK_DIRECT_POST_ENABLED = "true";
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (...args) =>
+      String(args[0]).includes("/creator-info")
+        ? Response.json(value, { status })
+        : original(...args),
+    );
+  }
+  it("Direct Post autorizado conserva payload y deduplicación", async () => {
+    enableDirect();
+    const input = await directInput();
+    expect((await send(input)).status).toBe(201);
+    expect((await send(input)).status).toBe(200);
+    expect(postCalls).toBe(1);
+    const call = vi
+      .mocked(fetch)
+      .mock.calls.find(([url]) => String(url).endsWith("/posts"));
+    const payload = JSON.parse(String(call?.[1]?.body));
+    expect(payload.posts[0].settings.content_posting_method).toBe(
+      "DIRECT_POST",
+    );
+    expect(payload.posts[0].settings.privacy_level).toBe("SELF_ONLY");
+    expect(payload.posts[0].integration.id).toBe("channel");
+    expect(payload.posts[0].value[0].image[0]).not.toHaveProperty("duration");
+  });
+  it.each([404, 401, 409, 500])(
+    "bloquea extensión ausente o sin permiso %s",
+    async (status) => {
+      enableDirect({ error: "fixture" }, status);
+      expect((await send(await directInput())).status).toBe(409);
+      expect(postCalls).toBe(0);
+    },
+  );
+  it.each([
+    { privacy_level_options: ["PUBLIC_TO_EVERYONE"] },
+    { max_video_post_duration_sec: 5 },
+    { checkedAt: "2020-01-01T00:00:00Z" },
+  ])("bloquea restricciones nuevas o caducadas %j", async (change) => {
+    enableDirect({ ...creator(), ...change });
+    expect((await send(await directInput())).status).toBe(409);
+    expect(postCalls).toBe(0);
+  });
+  it("bloquea interacción prohibida sin escritura externa", async () => {
+    enableDirect();
+    const input = await directInput();
+    input.direct.comment = true;
+    expect((await send(input)).status).toBe(409);
+    expect(postCalls).toBe(0);
+  });
+  it.each(["schedule", "draft"])(
+    "Direct Post no permite %s sin validación de ejecución completa",
+    async (action) => {
+      enableDirect();
+      expect((await send({ ...(await directInput()), action })).status).toBe(
+        400,
+      );
+      expect(postCalls).toBe(0);
+    },
+  );
+  it.each(["musicConsent", "finalConfirmation"])("exige %s", async (field) => {
+    enableDirect();
+    expect(
+      (await send({ ...(await directInput()), [field]: false })).status,
+    ).toBe(400);
+    expect(postCalls).toBe(0);
+  });
+  it("no acepta duración declarada por navegador ni recibo UPLOAD antiguo para Direct Post", async () => {
+    enableDirect();
+    const input = await directInput();
+    input.mediaReceipt = (await submission()).mediaReceipt;
+    expect((await send(input)).status).toBe(400);
+    expect(postCalls).toBe(0);
+  });
+  it("Direct Post timeout no se repite", async () => {
+    enableDirect();
+    upstreamFailure = true;
+    const input = await directInput();
+    expect((await send(input)).status).toBe(502);
+    expect((await send(input)).status).toBe(409);
+    expect(postCalls).toBe(1);
+  });
   async function connect(body: unknown) {
     return POST(
       new Request("https://social.mavetio.com/api/publisher/connect", {

@@ -1,4 +1,13 @@
-# Direct Post: contrato y bloqueo en Postiz v2.25.3
+# Direct Post: análisis histórico de la API estándar v2.25.3
+
+**Actualización:** este documento conserva el análisis de la API estándar. Ya se
+preparó una extensión privada y el flujo condicionado en Mavetio; ver
+[instalación, validación y rollback](../extensions/postiz/README.md). La activación
+sigue deshabilitada por defecto y pendiente de validar la imagen personalizada.
+Las menciones siguientes a funcionalidad no implementada describen el estado
+anterior a esa extensión, no el nuevo código condicionado.
+
+**Documento vigente para operar la versión personalizada:** [extensions/postiz/README.md](../extensions/postiz/README.md).
 
 ## Resultado
 

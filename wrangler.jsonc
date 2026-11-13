@@ -13,6 +13,7 @@
     "CF_ACCESS_AUD": "a4761f8be09aeeda7589eb3becba898d9deac85b39f27b47e74f4c88e1ebf295",
     "CF_ACCESS_TEAM_DOMAIN": "testpipipi.cloudflareaccess.com",
     "TIKTOK_SANDBOX": "true",
+    "TIKTOK_DIRECT_POST_ENABLED": "false",
     "PRIVACY_URL": "https://mavetio.com/privacidad",
     "TERMS_URL": "https://mavetio.com/terminos",
     "DELETION_URL": "https://mavetio.com/eliminacion-de-datos"

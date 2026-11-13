@@ -22,6 +22,12 @@ import {
 } from "lucide-react";
 import { Brand } from "./brand";
 import { DirectPostAvailability } from "./direct-post-availability";
+import { DirectPostFields, emptyDirect } from "./direct-post-fields";
+import {
+  parseCreator,
+  validateDirect,
+  type Creator,
+} from "@/extensions/postiz/mavetio-tiktok";
 import {
   PostizReconnectLink,
   TikTokAuthorizationLink,
@@ -526,6 +532,7 @@ export function Dashboard({
             <Composer
               accounts={accounts || []}
               ready={!!config?.postizConfigured && !!config.storageConfigured}
+              directConfigured={!!config?.directPostConfigured}
               onCreated={() => {
                 void load();
               }}
@@ -571,7 +578,9 @@ export function Dashboard({
                   },
                   {
                     label: "Publicación directa (Direct Post)",
-                    text: "Pendiente: Postiz no expone aquí toda la información dinámica del creador requerida. No disponible en este panel.",
+                    text: config?.directPostConfigured
+                      ? "Extensión activada en Mavetio. Solo se habilita al consultar correctamente al creador; privacidad Solo yo y envío inmediato."
+                      : "Desactivado. Requiere la extensión privada de Postiz, su validación y activación explícita.",
                     ready: false,
                   },
                   {
@@ -745,13 +754,23 @@ export function PostList({
 function Composer({
   accounts,
   ready,
+  directConfigured,
   onCreated,
 }: {
   accounts: Integration[];
   ready: boolean;
+  directConfigured: boolean;
   onCreated: () => void;
 }) {
   const [account, setAccount] = useState("");
+  const [method, setMethod] = useState<"UPLOAD" | "DIRECT_POST">("UPLOAD");
+  const [creator, setCreator] = useState<Creator | null>(null);
+  const [creatorError, setCreatorError] = useState("");
+  const [creatorReload, setCreatorReload] = useState(0);
+  const [privacy, setPrivacy] = useState("");
+  const [direct, setDirect] = useState(emptyDirect);
+  const [music, setMusic] = useState(false);
+  const [duration, setDuration] = useState(0);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [action, setAction] = useState("schedule");
@@ -768,6 +787,40 @@ function Composer({
   const [uncertain, setUncertain] = useState(false);
   const requestId = useRef<string>("");
   const receipt = useRef("");
+  useEffect(() => {
+    let cancelled = false;
+    let expiry: ReturnType<typeof setTimeout> | undefined;
+    setCreator(null);
+    setPrivacy("");
+    setDirect(emptyDirect);
+    setMusic(false);
+    setConsent(false);
+    setCreatorError("");
+    if (directConfigured && account) {
+      void api<Creator>(
+        `tiktok-creator?integrationId=${encodeURIComponent(account)}`,
+      )
+        .then((value) => {
+          if (cancelled) return;
+          const current = parseCreator(value);
+          setCreator(current);
+          expiry = setTimeout(() => {
+            setCreator(null);
+            setConsent(false);
+            setCreatorError(
+              "Actualiza la información del creador antes de continuar.",
+            );
+          }, 110000);
+        })
+        .catch((e) => {
+          if (!cancelled) setCreatorError(e.message);
+        });
+    }
+    return () => {
+      cancelled = true;
+      if (expiry) clearTimeout(expiry);
+    };
+  }, [account, directConfigured, creatorReload]);
   useEffect(() => {
     const pending = sessionStorage.getItem("mavetio-pending");
     if (pending) {
@@ -786,6 +839,7 @@ function Composer({
   }, [file]);
   function selectFile(selected?: File) {
     setError("");
+    setDuration(0);
     setVideoValid(false);
     receipt.current = "";
     setStored(false);
@@ -816,6 +870,37 @@ function Composer({
         (!date || new Date(date).getTime() < Date.now() + 60000)
       )
         throw new Error("Elige una fecha al menos un minuto en el futuro.");
+      if (method === "DIRECT_POST") {
+        if (
+          !creator ||
+          privacy !== "SELF_ONLY" ||
+          !music ||
+          !file.name.toLowerCase().endsWith(".mp4")
+        )
+          throw new Error(
+            "Revisa creador, privacidad, consentimiento musical y formato MP4.",
+          );
+        const current = parseCreator(
+          await api<Creator>(
+            `tiktok-creator?integrationId=${encodeURIComponent(account)}`,
+          ),
+        );
+        if (current.creator_username !== creator.creator_username)
+          throw new Error(
+            "El creador ha cambiado. Actualiza los datos y revisa el destino.",
+          );
+        validateDirect(
+          { ...direct, privacy_level: "SELF_ONLY" },
+          current,
+          duration,
+        );
+        if (
+          !window.confirm(
+            `Publicar ahora «${title}» como ${current.creator_nickname} (@${current.creator_username}), visible solo para ti. Comentarios: ${direct.comment ? "sí" : "no"}; Duet: ${direct.duet ? "sí" : "no"}; Stitch: ${direct.stitch ? "sí" : "no"}. Promoción propia: ${direct.brand_organic_toggle ? "sí" : "no"}; IA: ${direct.video_made_with_ai ? "sí" : "no"}. ¿Confirmas el envío?`,
+          )
+        )
+          return;
+      }
       if (!receipt.current) {
         setPhase("Subiendo vídeo a Postiz…");
         const form = new FormData();
@@ -838,16 +923,21 @@ function Composer({
         ...(action === "schedule"
           ? { date: new Date(date).toISOString() }
           : {}),
-        method: "UPLOAD",
+        method,
+        ...(method === "DIRECT_POST"
+          ? { direct, musicConsent: music, finalConfirmation: true }
+          : {}),
         mediaReceipt: receipt.current,
         consent,
       });
       sessionStorage.removeItem("mavetio-pending");
       setSuccess(
-        submissionNotice(
-          action,
-          result.map((p) => p.postId),
-        ),
+        method === "DIRECT_POST"
+          ? `Solicitud Direct Post aceptada por Postiz. ID: ${result.map((p) => p.postId).join(", ")}. Aún no confirma publicación. Actualiza los estados antes de repetir.`
+          : submissionNotice(
+              action,
+              result.map((p) => p.postId),
+            ),
       );
       setUncertain(true);
       onCreated();
@@ -950,38 +1040,90 @@ function Composer({
           </div>
           <label className="field">
             Modo de publicación
-            <select value="UPLOAD" onChange={() => {}}>
+            <select
+              value={method}
+              onChange={(e) => {
+                setMethod(e.target.value as "UPLOAD" | "DIRECT_POST");
+                setAction(
+                  e.target.value === "DIRECT_POST" ? "now" : "schedule",
+                );
+                setPrivacy("");
+                setDirect(emptyDirect);
+                setMusic(false);
+                setConsent(false);
+              }}
+            >
               <option value="UPLOAD">
                 Enviar a TikTok para finalizar en la app
               </option>
-              <option value="DIRECT_POST" disabled>
-                Direct Post · bloqueado por requisitos pendientes
+              <option
+                value="DIRECT_POST"
+                disabled={!creator?.privacy_level_options.includes("SELF_ONLY")}
+              >
+                Publicar directamente en TikTok
               </option>
             </select>
           </label>
-          <DirectPostAvailability />
-          <div className="notice">
-            <CircleHelp size={18} />
-            <p>
-              Este modo no publica automáticamente en tu perfil. Debes abrir
-              TikTok y terminar la publicación dentro de 24 horas desde la
-              recepción.
+          {!creator && <DirectPostAvailability />}
+          {creatorError && <p role="alert">{creatorError}</p>}
+          {creator && !creator.privacy_level_options.includes("SELF_ONLY") && (
+            <p role="alert">
+              TikTok no permite Solo yo para este creador. Direct Post está
+              bloqueado.
             </p>
-          </div>
-          <label className="field">
-            Privacidad
-            <select disabled value="in-app" onChange={() => {}}>
-              <option value="in-app">Se elige al finalizar en TikTok</option>
-            </select>
-          </label>
-          <p className="field-hint">
-            TikTok no aplica privacidad, comentarios, duetos, etiquetas
-            comerciales o de IA enviados mediante UPLOAD. Configúralos en la app
-            antes de publicar.
-          </p>
+          )}
+          {directConfigured && account && (
+            <button
+              type="button"
+              className="text-link"
+              onClick={() => setCreatorReload((n) => n + 1)}
+            >
+              Actualizar restricciones de TikTok
+            </button>
+          )}
+          {method === "DIRECT_POST" && creator && (
+            <DirectPostFields
+              creator={creator}
+              privacy={privacy}
+              onPrivacy={setPrivacy}
+              value={direct}
+              onChange={setDirect}
+              music={music}
+              onMusic={setMusic}
+            />
+          )}
+          {method === "UPLOAD" && (
+            <>
+              <div className="notice">
+                <CircleHelp size={18} />
+                <p>
+                  Este modo no publica automáticamente en tu perfil. Debes abrir
+                  TikTok y terminar la publicación dentro de 24 horas desde la
+                  recepción.
+                </p>
+              </div>
+              <label className="field">
+                Privacidad
+                <select disabled value="in-app" onChange={() => {}}>
+                  <option value="in-app">
+                    Se elige al finalizar en TikTok
+                  </option>
+                </select>
+              </label>
+              <p className="field-hint">
+                TikTok no aplica privacidad, comentarios, duetos, etiquetas
+                comerciales o de IA enviados mediante UPLOAD. Configúralos en la
+                app antes de publicar.
+              </p>
+            </>
+          )}
           <label className="field">
             ¿Cuándo quieres enviarlo?
-            <select value={action} onChange={(e) => setAction(e.target.value)}>
+            <select
+              value={action}
+              disabled={method === "DIRECT_POST"}
+              onChange={(e) => setAction(e.target.value)}
+            >
               <option value="schedule">Programar envío</option>
               <option value="now">Enviar ahora</option>
               <option value="draft">Guardar como borrador en Postiz</option>
@@ -1012,16 +1154,29 @@ function Composer({
             <span>
               He revisado el vídeo y tengo los derechos necesarios. Autorizo su
               subida a Postiz y{" "}
-              {action === "draft"
-                ? "su almacenamiento como borrador."
-                : "su envío a la bandeja de TikTok; completaré la publicación en la app."}
+              {method === "DIRECT_POST"
+                ? "su publicación directa en TikTok con privacidad Solo yo."
+                : action === "draft"
+                  ? "su almacenamiento como borrador."
+                  : "su envío a la bandeja de TikTok; completaré la publicación en la app."}
             </span>
           </label>
           <button
             className="button submit-button"
             type="submit"
             disabled={
-              !ready || !account || !file || !videoValid || !consent || locked
+              !ready ||
+              !account ||
+              !file ||
+              !videoValid ||
+              !consent ||
+              locked ||
+              (method === "DIRECT_POST" &&
+                (!creator ||
+                  privacy !== "SELF_ONLY" ||
+                  !music ||
+                  duration <= 0 ||
+                  duration > creator.max_video_post_duration_sec))
             }
           >
             {busy ? (
@@ -1078,6 +1233,11 @@ function Composer({
                     requestId.current = "";
                     receipt.current = "";
                     setStored(false);
+                    setPrivacy("");
+                    setMusic(false);
+                    setDirect(emptyDirect);
+                    setConsent(false);
+                    setCreatorReload((n) => n + 1);
                     setUncertain(false);
                     setError("");
                   }
@@ -1096,6 +1256,10 @@ function Composer({
               requestId.current = "";
               receipt.current = "";
               setStored(false);
+              setPrivacy("");
+              setMusic(false);
+              setDirect(emptyDirect);
+              setCreatorReload((n) => n + 1);
               setUncertain(false);
               setSuccess("");
               setTitle("");
@@ -1124,6 +1288,7 @@ function Composer({
                 preload="metadata"
                 onLoadedMetadata={(e) => {
                   const v = e.currentTarget;
+                  setDuration(v.duration);
                   if (
                     Number.isFinite(v.duration) &&
                     v.duration > 0 &&

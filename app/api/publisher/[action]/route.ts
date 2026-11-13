@@ -8,6 +8,9 @@ import { buildPost, submissionSchema } from "@/lib/submissions";
 import { postizPostsSchema } from "@/lib/postiz-posts";
 import { MAX_VIDEO_BYTES } from "@/lib/types";
 import { DIRECT_POST_BLOCK } from "@/lib/tiktok-capabilities";
+import { creatorInfo } from "@/lib/tiktok-creator";
+import { validateDirect } from "@/extensions/postiz/mavetio-tiktok";
+import { mp4Duration } from "@/lib/mp4-duration";
 
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ action: string }> };
@@ -86,7 +89,32 @@ async function handle(request: Request, context: Context) {
           storageConfigured: !!c.DB && !!c.MEDIA_SIGNING_SECRET,
           postizWebUrl: c.POSTIZ_WEB_URL || "https://app.postiz.com",
           sandbox: c.TIKTOK_SANDBOX !== "false",
+          directPostConfigured: c.TIKTOK_DIRECT_POST_ENABLED === "true",
         });
+      if (action === "tiktok-creator") {
+        if (c.TIKTOK_DIRECT_POST_ENABLED !== "true")
+          throw new AppError(
+            409,
+            DIRECT_POST_BLOCK.code,
+            DIRECT_POST_BLOCK.message,
+          );
+        const id = z
+          .string()
+          .min(1)
+          .max(200)
+          .parse(new URL(request.url).searchParams.get("integrationId"));
+        if (
+          !(await integrations()).some(
+            (i) => i.id === id && i.identifier === "tiktok" && !i.disabled,
+          )
+        )
+          throw new AppError(
+            404,
+            "ACCOUNT_UNAVAILABLE",
+            "Cuenta TikTok no disponible.",
+          );
+        return reply(await creatorInfo(id));
+      }
       if (action === "integrations") return reply(await integrations());
       if (action === "posts") {
         const query = new URL(request.url).searchParams;
@@ -183,7 +211,16 @@ async function handle(request: Request, context: Context) {
             "MEDIA_URL",
             "Postiz devolvió una URL multimedia sin HTTPS.",
           );
-        const receipt = await new SignJWT(media)
+        const duration = mp4Duration(new Uint8Array(await file.arrayBuffer()));
+        const directVideo =
+          file.type === "video/mp4" &&
+          file.name.toLowerCase().endsWith(".mp4") &&
+          new URL(media.path).pathname.toLowerCase().endsWith(".mp4");
+        const receipt = await new SignJWT({
+          ...media,
+          ...(duration ? { duration } : {}),
+          directVideo,
+        })
           .setProtectedHeader({ alg: "HS256" })
           .setSubject(user.id)
           .setAudience("mavetio-media")
@@ -198,7 +235,8 @@ async function handle(request: Request, context: Context) {
           body &&
           typeof body === "object" &&
           "method" in body &&
-          body.method === "DIRECT_POST"
+          body.method === "DIRECT_POST" &&
+          c.TIKTOK_DIRECT_POST_ENABLED !== "true"
         )
           throw new AppError(
             409,
@@ -221,7 +259,12 @@ async function handle(request: Request, context: Context) {
             "PAST_DATE",
             "Programa el envío al menos un minuto en el futuro.",
           );
-        let media: { id: string; path: string };
+        let media: {
+          id: string;
+          path: string;
+          duration?: number;
+          directVideo?: boolean;
+        };
         try {
           const { payload } = await jwtVerify(
             input.mediaReceipt,
@@ -232,7 +275,14 @@ async function handle(request: Request, context: Context) {
               algorithms: ["HS256"],
             },
           );
-          media = z.object({ id: z.string(), path: z.url() }).parse(payload);
+          media = z
+            .object({
+              id: z.string(),
+              path: z.url(),
+              duration: z.number().positive().optional(),
+              directVideo: z.boolean().optional(),
+            })
+            .parse(payload);
         } catch {
           throw new AppError(
             400,
@@ -252,6 +302,24 @@ async function handle(request: Request, context: Context) {
             "ACCOUNT_UNAVAILABLE",
             "Selecciona una cuenta TikTok habilitada en Postiz.",
           );
+        if (input.method === "DIRECT_POST") {
+          if (!media.duration || !media.directVideo)
+            throw new AppError(
+              400,
+              "VIDEO_DURATION_UNAVAILABLE",
+              "Vuelve a cargar un MP4 con duración verificable para Direct Post.",
+            );
+          const creator = await creatorInfo(input.integrationId);
+          try {
+            validateDirect(input.direct, creator, media.duration);
+          } catch {
+            throw new AppError(
+              409,
+              "CREATOR_RESTRICTIONS_CHANGED",
+              "La privacidad, interacciones o duración no cumplen las restricciones actuales. Actualiza la información del creador.",
+            );
+          }
+        }
         const fingerprint = Array.from(
           new Uint8Array(
             await crypto.subtle.digest(
@@ -296,7 +364,9 @@ async function handle(request: Request, context: Context) {
             .parse(
               await postiz("/posts", {
                 method: "POST",
-                body: JSON.stringify(buildPost(input, media)),
+                body: JSON.stringify(
+                  buildPost(input, { id: media.id, path: media.path }),
+                ),
               }),
             );
           await c.DB.prepare(
