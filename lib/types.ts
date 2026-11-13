@@ -32,6 +32,22 @@ export function postLabel(post: SocialPost) {
 }
 
 export function postDeliveryDetail(post: SocialPost): string | null {
+  if (
+    readPostSettings(post.settings)?.content_posting_method === "DIRECT_POST"
+  ) {
+    switch (post.state) {
+      case "PUBLISHED":
+        return "Publicado según Postiz mediante Direct Post. Mavetio no ha consultado directamente TikTok para confirmar su visibilidad.";
+      case "QUEUE":
+        return "Direct Post programado, en cola o procesándose según Postiz. Aún no consta publicación completada.";
+      case "DRAFT":
+        return "Borrador Direct Post en Postiz; no acredita publicación.";
+      case "ERROR":
+        return "Postiz informa un error en Direct Post. Puede haber fallado o quedar sin confirmar; revisa TikTok antes de reenviar.";
+      default:
+        return "Resultado de Direct Post desconocido. Revisa Postiz y TikTok antes de reenviar.";
+    }
+  }
   if (readPostSettings(post.settings)?.content_posting_method !== "UPLOAD")
     return null;
   switch (post.state) {

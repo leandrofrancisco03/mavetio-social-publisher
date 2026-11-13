@@ -231,9 +231,53 @@ describe("Límites y registro persistente de envíos", () => {
     ).toBe(400);
     expect(
       (await send({ ...(await submission()), method: "DIRECT_POST" })).status,
-    ).toBe(400);
+    ).toBe(409);
     expect(postCalls).toBe(0);
   });
+  it.each([
+    "SELF_ONLY",
+    "PUBLIC_TO_EVERYONE",
+    "MUTUAL_FOLLOW_FRIENDS",
+    "FOLLOWER_OF_CREATOR",
+  ])(
+    "bloquea Direct Post con privacidad %s antes de cualquier efecto",
+    async (privacy) => {
+      const input = {
+        ...(await submission()),
+        method: "DIRECT_POST",
+        privacy_level: privacy,
+        permissions: ["video.publish"],
+        creatorInfo: { privacy_level_options: [privacy] },
+      };
+      const response = await send(input);
+      expect(response.status).toBe(409);
+      expect((await response.json()).code).toBe("DIRECT_POST_UNAVAILABLE");
+      expect(fetch).not.toHaveBeenCalled();
+      expect(
+        db.prepare("SELECT COUNT(*) AS count FROM submissions").get()?.count,
+      ).toBe(0);
+    },
+  );
+  it("no acepta ajustes Direct Post ocultos dentro de UPLOAD", async () => {
+    const response = await send({
+      ...(await submission()),
+      settings: {
+        content_posting_method: "DIRECT_POST",
+        privacy_level: "PUBLIC_TO_EVERYONE",
+      },
+    });
+    expect(response.status).toBe(400);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it.each([false, undefined])(
+    "rechaza UPLOAD sin consentimiento explícito: %s",
+    async (consent) => {
+      expect((await send({ ...(await submission()), consent })).status).toBe(
+        400,
+      );
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
   it("rechaza carga demasiado grande sin leerla ni llamar a Postiz", async () => {
     const result = await POST(
       new Request("https://social.mavetio.com/api/publisher/upload", {

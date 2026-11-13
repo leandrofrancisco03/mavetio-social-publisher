@@ -12,6 +12,8 @@ Se revisaron la [API de herramientas de Postiz](https://docs.postiz.com/public-a
 
 Por ello no se usa un método supuesto como `creatorInfo`, no se recogen tokens TikTok desde el navegador y no se reconstruye su OAuth. Para activar Direct Post debe añadirse primero una capacidad soportada en Postiz (o acordarse una extensión allí) que entregue las opciones vigentes del creador. Después se implementará y probará la experiencia requerida, incluida su revalidación al confirmar. No basta cambiar `UPLOAD` por `DIRECT_POST`.
 
+Actualización: el usuario confirmó recepción real de UPLOAD desde Mavetio. La revisión del contrato de Direct Post, sus bloqueos y la ampliación necesaria están en [TIKTOK-DIRECT-POST-CONTRACT.md](./TIKTOK-DIRECT-POST-CONTRACT.md). No se han realizado nuevas publicaciones durante esta revisión.
+
 ## Requisitos de TikTok que afectan al proyecto
 
 Las [guías oficiales](https://developers.tiktok.com/docs/en/content-sharing-guidelines) exigen para Direct Post información actual del creador, privacidad elegida sin valor predeterminado, controles de interacción sujetos a capacidades, límite de duración, declaraciones comerciales, consentimiento y seguimiento de estado. Los clientes sin auditoría tienen restricciones de privacidad y usuarios. La finalidad tampoco debe limitarse a las cuentas del equipo interno.

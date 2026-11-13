@@ -21,6 +21,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { Brand } from "./brand";
+import { DirectPostAvailability } from "./direct-post-availability";
 import {
   PostizReconnectLink,
   TikTokAuthorizationLink,
@@ -953,9 +954,12 @@ function Composer({
               <option value="UPLOAD">
                 Enviar a TikTok para finalizar en la app
               </option>
-              <option disabled>Direct Post · pendiente de integración</option>
+              <option value="DIRECT_POST" disabled>
+                Direct Post · bloqueado por requisitos pendientes
+              </option>
             </select>
           </label>
+          <DirectPostAvailability />
           <div className="notice">
             <CircleHelp size={18} />
             <p>

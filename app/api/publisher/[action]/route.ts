@@ -7,6 +7,7 @@ import { integrations, postiz, parsePostiz } from "@/lib/postiz";
 import { buildPost, submissionSchema } from "@/lib/submissions";
 import { postizPostsSchema } from "@/lib/postiz-posts";
 import { MAX_VIDEO_BYTES } from "@/lib/types";
+import { DIRECT_POST_BLOCK } from "@/lib/tiktok-capabilities";
 
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ action: string }> };
@@ -192,7 +193,19 @@ async function handle(request: Request, context: Context) {
         return reply({ receipt, name: file.name });
       }
       if (action === "submit") {
-        const input = submissionSchema.parse(await jsonBody(request));
+        const body = await jsonBody(request);
+        if (
+          body &&
+          typeof body === "object" &&
+          "method" in body &&
+          body.method === "DIRECT_POST"
+        )
+          throw new AppError(
+            409,
+            DIRECT_POST_BLOCK.code,
+            DIRECT_POST_BLOCK.message,
+          );
+        const input = submissionSchema.parse(body);
         if (!c.DB)
           throw new AppError(
             503,
