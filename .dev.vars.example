@@ -1,7 +1,7 @@
 # Copiar a .dev.vars; nunca versionar el archivo con credenciales.
 APP_URL=http://localhost:3001
-POSTIZ_API_URL=https://api.postiz.com/public/v1
-POSTIZ_WEB_URL=https://app.postiz.com
+POSTIZ_API_URL=https://postiz.mavetio.com/api/public/v1
+POSTIZ_WEB_URL=https://postiz.mavetio.com
 POSTIZ_API_KEY=
 CF_ACCESS_TEAM_DOMAIN=
 CF_ACCESS_AUD=
